@@ -635,7 +635,7 @@ def main():
     args = parse_arguments()
 
     if args.version:
-        print("Lff SHell version 1.0.1")
+        print("Lff SHell version 1.0.2")
         sys.exit(0)
 
     handle_signals()
