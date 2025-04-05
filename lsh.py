@@ -436,6 +436,13 @@ def calculator():
 def lpm_install(package_name):
     clear_screen()
     print(f"Installing package: {package_name}")
+
+    # Check if the package is already installed
+    installed_packages = load_installed_packages()
+    if package_name in installed_packages:
+        print(f"Package {package_name} is already installed.")
+        return
+
     repo_url = f"https://github.com/LFF-Linux-Packages/{package_name}/archive/refs/heads/main.zip"
     package_dir = LPM_DIR / package_name
 
@@ -458,7 +465,6 @@ def lpm_install(package_name):
         zip_path.unlink()  # Remove the zip file
 
         # Add commands to installed packages
-        installed_packages = load_installed_packages()
         installed_packages[package_name] = {"commands": [], "dependencies": {"python": [], "apt": []}}
         for file in package_dir.rglob("*"):
             if file.suffix in [".py", ".sh"]:
@@ -500,14 +506,19 @@ def lpm_install(package_name):
             installed_modules = load_installed_modules()
             installed_apt_packages = load_installed_apt_packages()
 
+            # Filter out already installed dependencies
+            python_packages_to_install = [pkg for pkg in python_packages if pkg not in installed_modules]
+            apt_packages_to_install = [pkg for pkg in apt_packages if pkg not in installed_apt_packages]
+
+            if not python_packages_to_install and not apt_packages_to_install:
+                print("All dependencies are already installed.")
+                return
+
             # Ask the user if they want to install dependencies
             install_deps = input("\nDo you want to install these dependencies? (y/n): ").lower()
             if install_deps == "y":
                 # Install Python dependencies
-                for package in python_packages:
-                    if package in installed_modules:
-                        print(f"Skipping Python package {package} (already installed).")
-                        continue
+                for package in python_packages_to_install:
                     print(f"Installing Python package: {package}")
                     try:
                         process = subprocess.Popen(["pip3", "install", "--break-system-packages", package], stdout=sys.stdout, stderr=sys.stderr)
@@ -533,10 +544,7 @@ def lpm_install(package_name):
                             return
 
                 # Install APT dependencies
-                for package in apt_packages:
-                    if package in installed_apt_packages:
-                        print(f"Skipping APT package {package} (already installed).")
-                        continue
+                for package in apt_packages_to_install:
                     print(f"Installing system package: {package}")
                     try:
                         process = subprocess.Popen(["sudo", "apt", "install", "-y", package], stdout=sys.stdout, stderr=sys.stderr)
@@ -619,6 +627,8 @@ def lpm_update():
     installed_modules = load_installed_modules()
     installed_apt_packages = load_installed_apt_packages()
 
+    all_updates_successful = True  # Track if all updates are successful
+
     for package_name, package_data in installed_packages.items():
         print(f"Updating package: {package_name}")
         package_dir = LPM_DIR / package_name
@@ -626,6 +636,7 @@ def lpm_update():
         # Validate package_data structure
         if not isinstance(package_data, dict) or "dependencies" not in package_data:
             print(f"Error: Invalid data structure for package '{package_name}'. Skipping...")
+            all_updates_successful = False
             continue
 
         # Re-download the package
@@ -634,6 +645,7 @@ def lpm_update():
             response = requests.get(repo_url, stream=True)
             if response.status_code != 200:
                 print(f"Failed to fetch package: {package_name}. Skipping...")
+                all_updates_successful = False
                 continue
             zip_path = package_dir / "package.zip"
             with open(zip_path, "wb") as f:
@@ -646,6 +658,7 @@ def lpm_update():
             print(f"Package {package_name} re-downloaded successfully.")
         except Exception as e:
             print(f"Error re-downloading package {package_name}: {e}")
+            all_updates_successful = False
             continue
 
         # Recursively search for requirements.txt and apt.txt
@@ -697,6 +710,7 @@ def lpm_update():
                         installed_python.append(package)
                     except Exception as e:
                         print(f"Error: {package} could not be installed because {e}.")
+                        all_updates_successful = False
 
                 for package in new_apt_packages:
                     print(f"Installing system package: {package}")
@@ -708,10 +722,12 @@ def lpm_update():
                         installed_apt.append(package)
                     except Exception as e:
                         print(f"Error: {package} could not be installed because {e}.")
+                        all_updates_successful = False
             elif install_deps == "n":
                 print(f"Skipping new dependencies for {package_name}.")
             else:
                 print("Invalid input. Skipping new dependencies.")
+                all_updates_successful = False
 
         # Update the dependencies in the installed packages
         package_data["dependencies"]["python"] = installed_python
@@ -720,13 +736,23 @@ def lpm_update():
     save_installed_packages(installed_packages)
     update_installed_modules()  # Update the installed modules list again
     update_installed_apt_packages()  # Update the installed APT packages list again
-    print("All packages updated successfully.")
+
+    if all_updates_successful:
+        print("All packages updated successfully.")
+    else:
+        print("Some packages failed to update. Please check the errors above.")
 
 def execute_command(command):
     try:
         installed_packages = load_installed_packages()
-        for package, files in installed_packages.items():
-            for file_path in files:
+        for package_name, package_data in installed_packages.items():
+            # Ensure package_data has the expected structure
+            if not isinstance(package_data, dict) or "commands" not in package_data:
+                print(f"Error: Invalid data structure for package '{package_name}'. Skipping...")
+                continue
+
+            # Iterate over the commands in the package
+            for file_path in package_data["commands"]:
                 file = Path(file_path)
                 if file.stem == command:
                     if file.suffix == ".py":
@@ -806,6 +832,18 @@ def change_directory(path):
     except PermissionError:
         print(f"cd: {path}: Permission denied")
 
+def show_installed_commands():
+    """Display all commands installed by lpm."""
+    installed_packages = load_installed_packages()
+    print("Installed commands:")
+    for package_name, package_data in installed_packages.items():
+        if "commands" in package_data:
+            print(f"\nPackage: {package_name}")
+            for command_path in package_data["commands"]:
+                command_name = Path(command_path).stem
+                print(f"  - {command_name}")
+            print("")
+
 def admin_menu():
     load_history()  # Load history at the start
     username = getpass.getuser()
@@ -821,6 +859,8 @@ def admin_menu():
                 clear_screen()
             elif command == "history":
                 show_history()
+            elif command == "cmds":
+                show_installed_commands()
             elif command == 'rps':
                 play_rps()
             elif command == 'hman':
@@ -855,7 +895,7 @@ def admin_menu():
             elif command == (" ") or command == ("  "):
                 continue
             elif command == "help":
-                print('Available commands: cd <path>, clear, history, rps, hman, snake, calc, lpm install <package>, lpm remove <package>, lpm search, lpm update, exit')
+                print('Available commands: cd <path>, clear, history, cmds, rps, hman, snake, calc, lpm install <package>, lpm remove <package>, lpm search, lpm update, exit')
                 print('Additionally, you can run installed package commands directly or system commands.')
             else:
                 if not execute_command(command):
