@@ -16,7 +16,7 @@ I occasionally create and publish new packages for it, and plan to expand the ec
 
 Warning: This script is experimential and it is not recommended to set it as the login/default shell.
 
-1. Run the command sudo echo "/usr/bin/lsh" > /etc/shells && chsh /usr/bin/lsh $USER && rm ~/.profile && echo "exec /usr/bin/lsh" > ~/.profile
+1. Run the command <pre> ```sudo echo "/usr/bin/lsh" > /etc/shells && chsh /usr/bin/lsh $USER && rm ~/.profile && echo "exec /usr/bin/lsh" > ~/.profile ``` </pre>
 
 Your all done! The next time you log in or open a terminal, lsh will greet you! If you have any issues, feel free to put them in the issues page of this repository!
 
