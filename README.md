@@ -9,13 +9,15 @@ I occasionally create and publish new packages for it, and plan to expand the ec
 1. Download the latest release from https://github.com/LFF-Linux/LFF-Linux-LSH/releases/latest
 2. Open a terminal, and go to the folder that contains the *lsh.py* file.
 3. Run the command " sudo cp ./main.py /usr/bin/lsh && chmod 777 /usr/bin/lsh " (it has a shebang on it, it does not need to be ran by python directly)
-4. Run the command " lsh --version ". if it outputs the version you doenloaded, your good to go!
+4. Run the command " lsh --version ". if it outputs the version you downloaded, your good to go!
 5. Run the command " lsh " to enter your new shell!
 
 **How to set as login shell**
 
 Warning: This script is experimential and it is not recommended to set it as the login/default shell.
 
-1. Run the command " sudo echo "/usr/bin/lsh" > /etc/shells && chsh /usr/bin/lsh $USER && rm ~/.profile && echo "exec /usr/bin/lsh" > ~/.profile "
+1. Run the command sudo echo "/usr/bin/lsh" > /etc/shells && chsh /usr/bin/lsh $USER && rm ~/.profile && echo "exec /usr/bin/lsh" > ~/.profile
 
 Your all done! The next time you log in or open a terminal, lsh will greet you! If you have any issues, feel free to put them in the issues page of this repository!
+
+<pre> ```bash # This is a code block echo "Looks like a box!" ``` </pre>
