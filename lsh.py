@@ -585,7 +585,7 @@ def lpm_update():
     installed_modules = load_installed_modules()
 
     for package_name, package_data in installed_packages.items():
-        print(f"Checking for updates in package: {package_name}")
+        print(f"Updating package: {package_name}")
         package_dir = LPM_DIR / package_name
 
         # Validate package_data structure
@@ -593,9 +593,25 @@ def lpm_update():
             print(f"Error: Invalid data structure for package '{package_name}'. Skipping...")
             continue
 
-        dependencies = package_data.get("dependencies", {})
-        installed_python = dependencies.get("python", [])
-        installed_apt = dependencies.get("apt", [])
+        # Re-download the package
+        repo_url = f"https://github.com/LFF-Linux-Packages/{package_name}/archive/refs/heads/main.zip"
+        try:
+            response = requests.get(repo_url, stream=True)
+            if response.status_code != 200:
+                print(f"Failed to fetch package: {package_name}. Skipping...")
+                continue
+            zip_path = package_dir / "package.zip"
+            with open(zip_path, "wb") as f:
+                f.write(response.content)
+
+            # Extract the package
+            with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                zip_ref.extractall(package_dir)
+            zip_path.unlink()  # Remove the zip file
+            print(f"Package {package_name} re-downloaded successfully.")
+        except Exception as e:
+            print(f"Error re-downloading package {package_name}: {e}")
+            continue
 
         # Recursively search for requirements.txt and apt.txt
         requirements_file = None
@@ -605,6 +621,10 @@ def lpm_update():
                 requirements_file = Path(root) / "requirements.txt"
             if "apt.txt" in files:
                 apt_file = Path(root) / "apt.txt"
+
+        dependencies = package_data.get("dependencies", {})
+        installed_python = dependencies.get("python", [])
+        installed_apt = dependencies.get("apt", [])
 
         new_python_packages = []
         new_apt_packages = []
