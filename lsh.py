@@ -135,17 +135,79 @@ def play_hangman():
     guessed_letters = []
     attempts = 6
 
+    hangman_stages = [
+        """
+           _________
+           |       |
+           |       
+           |      
+           |      
+           |      
+        ___|___
+        """,
+        """
+           _________
+           |       |
+           |       O
+           |      
+           |      
+           |      
+        ___|___
+        """,
+        """
+           _________
+           |       |
+           |       O
+           |       |
+           |      
+           |      
+        ___|___
+        """,
+        """
+           _________
+           |       |
+           |       O
+           |      /|
+           |      
+           |      
+        ___|___
+        """,
+        """
+           _________
+           |       |
+           |       O
+           |      /|\\
+           |      
+           |      
+        ___|___
+        """,
+        """
+           _________
+           |       |
+           |       O
+           |      /|\\
+           |      / 
+           |      
+        ___|___
+        """,
+        """
+           _________
+           |       |
+           |       O
+           |      /|\\
+           |      / \\
+           |      
+        ___|___
+        """
+    ]
+
     print("Welcome to Hangman!")
     print("Try to guess the word. You have 6 attempts.")
 
     while True:
-        hidden_word = ""
-        for letter in word:
-            if letter in guessed_letters:
-                hidden_word += letter
-            else:
-                hidden_word += "_"
-
+        clear_screen()
+        print(hangman_stages[6 - attempts])  # Display the current hangman stage
+        hidden_word = "".join([letter if letter in guessed_letters else "_" for letter in word])
         print("\nWord:", hidden_word)
         print("Guessed letters:", ", ".join(guessed_letters))
         print("Attempts left:", attempts)
@@ -157,12 +219,6 @@ def play_hangman():
         if attempts == 0:
             print("Game over! You ran out of attempts.")
             print("The word was:", word)
-            print("   _________")
-            print("   |       |")
-            print("   |       O")
-            print("   |      /|\\")
-            print("   |      / \\")
-            print("___|___")
             break
 
         guess = input("Enter a letter: ").lower()
@@ -182,29 +238,6 @@ def play_hangman():
         else:
             print("Wrong guess!")
             attempts -= 1
-
-        print("   _________")
-        print("   |       |")
-
-        if attempts < 6:
-            print("   |       O")
-        else:
-            print("   |")
-        if attempts == 2:
-            print("   |      /")
-        elif attempts == 1:
-            print("   |      /|\\")
-        else:
-            print("   |")
-
-        if attempts < 4:
-            print("   |      /")
-        elif attempts < 3:
-            print("   |      / \\")
-        else:
-            print("   |")
-
-        print("___|___")
 
     play_again = input("Do you want to play again? (y/n): ")
     if play_again.lower() == "y":
