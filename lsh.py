@@ -568,6 +568,17 @@ def admin_menu():
                 play_snake()
             elif command == 'calc':
                 calculator()
+            elif command == 'lpm':
+                print('LFF Linux Package Manager')
+                print('Available commands: install, remove, search, update')
+            elif command == ('lpm install'):
+                print('Usage: lpm install <package_name>')
+            elif command == ('lpm remove'): 
+                print('Usage: lpm remove <package_name>')
+            elif command == ('lpm search'): 
+                print('Usage: lpm search')
+            elif command == ('lpm update'):
+                print('Usage: lpm update')
             elif command.startswith('lpm install '):
                 package_name = command.split(' ', 2)[2]
                 lpm_install(package_name)
