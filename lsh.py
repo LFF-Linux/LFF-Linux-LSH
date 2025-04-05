@@ -21,6 +21,7 @@ LPM_DIR = Path.home() / ".config/lff-linux/packages"
 INSTALLED_PACKAGES_FILE = Path.home() / ".config/lff-linux/installed_packages.json"
 HISTORY_FILE = Path.home() / ".config/lff-linux/history.txt"
 INSTALLED_MODULES_FILE = Path.home() / ".config/lff-linux/installed_modules.json"
+INSTALLED_APT_PACKAGES_FILE = Path.home() / ".config/lff-linux/installed_apt_packages.json"
 
 # Load command history from file
 def load_history():
@@ -90,6 +91,30 @@ def update_installed_modules():
             print(f"Error updating installed modules: {result.stderr.strip()}")
     except Exception as e:
         print(f"Error updating installed modules: {e}")
+
+def load_installed_apt_packages():
+    """Load the list of globally installed APT packages."""
+    if INSTALLED_APT_PACKAGES_FILE.exists():
+        with open(INSTALLED_APT_PACKAGES_FILE, "r") as file:
+            return json.load(file)
+    return []
+
+def save_installed_apt_packages(packages):
+    """Save the list of globally installed APT packages."""
+    with open(INSTALLED_APT_PACKAGES_FILE, "w") as file:
+        json.dump(packages, file, indent=4)
+
+def update_installed_apt_packages():
+    """Update the installed APT packages list by checking the system."""
+    try:
+        result = subprocess.run(["dpkg-query", "-W", "-f=${Package}\n"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode == 0:
+            installed_apt_packages = result.stdout.strip().split("\n")
+            save_installed_apt_packages(installed_apt_packages)
+        else:
+            print(f"Error updating installed APT packages: {result.stderr.strip()}")
+    except Exception as e:
+        print(f"Error updating installed APT packages: {e}")
 
 def play_rps():
     print("Welcome to Rock, Paper, Scissors!")
@@ -471,8 +496,9 @@ def lpm_install(package_name):
             else:
                 apt_packages = []
 
-            # Load installed modules
+            # Load installed modules and APT packages
             installed_modules = load_installed_modules()
+            installed_apt_packages = load_installed_apt_packages()
 
             # Ask the user if they want to install dependencies
             install_deps = input("\nDo you want to install these dependencies? (y/n): ").lower()
@@ -484,12 +510,14 @@ def lpm_install(package_name):
                         continue
                     print(f"Installing Python package: {package}")
                     try:
-                        result = subprocess.run(["pip3", "install", "--break-system-packages", package], text=True, stderr=subprocess.PIPE)
-                        if result.returncode != 0:
+                        process = subprocess.Popen(["pip3", "install", "--break-system-packages", package], stdout=sys.stdout, stderr=sys.stderr)
+                        process.communicate()
+                        if process.returncode != 0:
                             print(f"pip3 failed. Trying pip...")
-                            result = subprocess.run(["pip", "install", "--break-system-packages", package], text=True, stderr=subprocess.PIPE)
-                            if result.returncode != 0:
-                                raise Exception(result.stderr.strip())
+                            process = subprocess.Popen(["pip", "install", "--break-system-packages", package], stdout=sys.stdout, stderr=sys.stderr)
+                            process.communicate()
+                            if process.returncode != 0:
+                                raise Exception(f"Failed to install {package}")
                         installed_packages[package_name]["dependencies"]["python"].append(package)
                     except Exception as e:
                         print(f"Error: {package} could not be installed because {e}.")
@@ -506,11 +534,15 @@ def lpm_install(package_name):
 
                 # Install APT dependencies
                 for package in apt_packages:
+                    if package in installed_apt_packages:
+                        print(f"Skipping APT package {package} (already installed).")
+                        continue
                     print(f"Installing system package: {package}")
                     try:
-                        result = subprocess.run(["sudo", "apt", "install", "-y", package], text=True, stderr=subprocess.PIPE)
-                        if result.returncode != 0:
-                            raise Exception(result.stderr.strip())
+                        process = subprocess.Popen(["sudo", "apt", "install", "-y", package], stdout=sys.stdout, stderr=sys.stderr)
+                        process.communicate()
+                        if process.returncode != 0:
+                            raise Exception(f"Failed to install {package}")
                         installed_packages[package_name]["dependencies"]["apt"].append(package)
                     except Exception as e:
                         print(f"Error: {package} could not be installed because {e}.")
@@ -533,6 +565,7 @@ def lpm_install(package_name):
 
         save_installed_packages(installed_packages)
         update_installed_modules()  # Update the installed modules list
+        update_installed_apt_packages()  # Update the installed APT packages list
         print("Installation complete.")
     except requests.exceptions.RequestException as e:
         print(f"Error downloading package: {e}")
@@ -582,7 +615,9 @@ def lpm_update():
     print("Updating all installed packages...")
     installed_packages = load_installed_packages()
     update_installed_modules()  # Update the installed modules list
+    update_installed_apt_packages()  # Update the installed APT packages list
     installed_modules = load_installed_modules()
+    installed_apt_packages = load_installed_apt_packages()
 
     for package_name, package_data in installed_packages.items():
         print(f"Updating package: {package_name}")
@@ -637,7 +672,7 @@ def lpm_update():
         if apt_file:
             with open(apt_file, "r") as f:
                 apt_packages = [line.strip() for line in f if line.strip()]
-                new_apt_packages = [pkg for pkg in apt_packages if pkg not in installed_apt]
+                new_apt_packages = [pkg for pkg in apt_packages if pkg not in installed_apt and pkg not in installed_apt_packages]
 
         if new_python_packages or new_apt_packages:
             print(f"New dependencies found for {package_name}:")
@@ -651,12 +686,14 @@ def lpm_update():
                 for package in new_python_packages:
                     print(f"Installing Python package: {package}")
                     try:
-                        result = subprocess.run(["pip3", "install", "--break-system-packages", package], text=True, stderr=subprocess.PIPE)
-                        if result.returncode != 0:
+                        process = subprocess.Popen(["pip3", "install", "--break-system-packages", package], stdout=sys.stdout, stderr=sys.stderr)
+                        process.communicate()
+                        if process.returncode != 0:
                             print(f"pip3 failed. Trying pip...")
-                            result = subprocess.run(["pip", "install", "--break-system-packages", package], text=True, stderr=subprocess.PIPE)
-                            if result.returncode != 0:
-                                raise Exception(result.stderr.strip())
+                            process = subprocess.Popen(["pip", "install", "--break-system-packages", package], stdout=sys.stdout, stderr=sys.stderr)
+                            process.communicate()
+                            if process.returncode != 0:
+                                raise Exception(f"Failed to install {package}")
                         installed_python.append(package)
                     except Exception as e:
                         print(f"Error: {package} could not be installed because {e}.")
@@ -664,9 +701,10 @@ def lpm_update():
                 for package in new_apt_packages:
                     print(f"Installing system package: {package}")
                     try:
-                        result = subprocess.run(["sudo", "apt", "install", "-y", package], text=True, stderr=subprocess.PIPE)
-                        if result.returncode != 0:
-                            raise Exception(result.stderr.strip())
+                        process = subprocess.Popen(["sudo", "apt", "install", "-y", package], stdout=sys.stdout, stderr=sys.stderr)
+                        process.communicate()
+                        if process.returncode != 0:
+                            raise Exception(f"Failed to install {package}")
                         installed_apt.append(package)
                     except Exception as e:
                         print(f"Error: {package} could not be installed because {e}.")
@@ -681,6 +719,7 @@ def lpm_update():
 
     save_installed_packages(installed_packages)
     update_installed_modules()  # Update the installed modules list again
+    update_installed_apt_packages()  # Update the installed APT packages list again
     print("All packages updated successfully.")
 
 def execute_command(command):
@@ -740,20 +779,17 @@ def is_interactive_command(command):
     return any(command.split()[0] == cmd for cmd in interactive_commands)
 
 def execute_system_command(command):
+    """Execute a system command and stream its output in real-time."""
     try:
         if is_interactive_command(command):
             # Run interactive commands with terminal inheritance
             subprocess.run(command, shell=True)
         else:
-            # Run non-interactive commands and capture their output
-            result = subprocess.run(command, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if result.returncode != 0:
-                print(f"Error: Command '{command}' failed with the following error:")
-                print(result.stderr.strip())
-            else:
-                # Display the command's standard output if it succeeds
-                if result.stdout.strip():
-                    print(result.stdout.strip())
+            # Stream non-interactive commands in real-time
+            process = subprocess.Popen(command, shell=True, stdout=sys.stdout, stderr=sys.stderr)
+            process.communicate()
+            if process.returncode != 0:
+                print(f"Error: Command '{command}' failed with exit code {process.returncode}.")
     except Exception as e:
         print(f"Error executing system command '{command}': {e}")
 
@@ -882,6 +918,8 @@ def main():
                 print(f"Error executing command: {e}")
             sys.exit(0)
 
+        update_installed_apt_packages()
+        update_installed_modules()
         # Start the interactive shell
         admin_menu()
     except Exception as e:
