@@ -20,6 +20,7 @@ import argparse
 LPM_DIR = Path.home() / ".config/lff-linux/packages"
 INSTALLED_PACKAGES_FILE = Path.home() / ".config/lff-linux/installed_packages.json"
 HISTORY_FILE = Path.home() / ".config/lff-linux/history.txt"
+INSTALLED_MODULES_FILE = Path.home() / ".config/lff-linux/installed_modules.json"
 
 # Load command history from file
 def load_history():
@@ -62,6 +63,33 @@ def load_installed_packages():
 def save_installed_packages(packages):
     with open(INSTALLED_PACKAGES_FILE, "w") as file:
         json.dump(packages, file, indent=4)
+
+def load_installed_modules():
+    """Load the list of globally installed modules."""
+    if INSTALLED_MODULES_FILE.exists():
+        with open(INSTALLED_MODULES_FILE, "r") as file:
+            return json.load(file)
+    return []
+
+def save_installed_modules(modules):
+    """Save the list of globally installed modules."""
+    with open(INSTALLED_MODULES_FILE, "w") as file:
+        json.dump(modules, file, indent=4)
+
+def update_installed_modules():
+    """Update the installed modules list by checking the system."""
+    try:
+        result = subprocess.run(["pip3", "list", "--format=json"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode == 0:
+            try:
+                installed_modules = [pkg["name"] for pkg in json.loads(result.stdout)]
+                save_installed_modules(installed_modules)
+            except (json.JSONDecodeError, KeyError) as e:
+                print(f"Error parsing pip3 output: {e}")
+        else:
+            print(f"Error updating installed modules: {result.stderr.strip()}")
+    except Exception as e:
+        print(f"Error updating installed modules: {e}")
 
 def play_rps():
     print("Welcome to Rock, Paper, Scissors!")
@@ -406,15 +434,108 @@ def lpm_install(package_name):
 
         # Add commands to installed packages
         installed_packages = load_installed_packages()
-        installed_packages[package_name] = []
+        installed_packages[package_name] = {"commands": [], "dependencies": {"python": [], "apt": []}}
         for file in package_dir.rglob("*"):
             if file.suffix in [".py", ".sh"]:
                 command_name = file.stem
-                installed_packages[package_name].append(str(file))
+                installed_packages[package_name]["commands"].append(str(file))
                 print(f"Adding command: {command_name}")
         save_installed_packages(installed_packages)
 
         print(f"Package {package_name} installed successfully.")
+
+        # Recursively search for requirements.txt and apt.txt
+        requirements_file = None
+        apt_file = None
+        for root, _, files in os.walk(package_dir):
+            if "requirements.txt" in files:
+                requirements_file = Path(root) / "requirements.txt"
+            if "apt.txt" in files:
+                apt_file = Path(root) / "apt.txt"
+
+        if requirements_file or apt_file:
+            print("\nDependencies found:")
+            if requirements_file:
+                print(f"- Python dependencies (from {requirements_file}):")
+                with open(requirements_file, "r") as f:
+                    python_packages = [line.strip() for line in f if line.strip()]
+                    print("\n".join(python_packages))
+            else:
+                python_packages = []
+
+            if apt_file:
+                print(f"- System dependencies (from {apt_file}):")
+                with open(apt_file, "r") as f:
+                    apt_packages = [line.strip() for line in f if line.strip()]
+                    print("\n".join(apt_packages))
+            else:
+                apt_packages = []
+
+            # Load installed modules
+            installed_modules = load_installed_modules()
+
+            # Ask the user if they want to install dependencies
+            install_deps = input("\nDo you want to install these dependencies? (y/n): ").lower()
+            if install_deps == "y":
+                # Install Python dependencies
+                for package in python_packages:
+                    if package in installed_modules:
+                        print(f"Skipping Python package {package} (already installed).")
+                        continue
+                    print(f"Installing Python package: {package}")
+                    try:
+                        result = subprocess.run(["pip3", "install", "--break-system-packages", package], text=True, stderr=subprocess.PIPE)
+                        if result.returncode != 0:
+                            print(f"pip3 failed. Trying pip...")
+                            result = subprocess.run(["pip", "install", "--break-system-packages", package], text=True, stderr=subprocess.PIPE)
+                            if result.returncode != 0:
+                                raise Exception(result.stderr.strip())
+                        installed_packages[package_name]["dependencies"]["python"].append(package)
+                    except Exception as e:
+                        print(f"Error: {package} could not be installed because {e}.")
+                        continue_install = input("Do you want to continue installation? (y/n): ").lower()
+                        if continue_install == "n":
+                            print("Uninstalling package...")
+                            lpm_remove(package_name)
+                            return
+                        elif continue_install == "y":
+                            print(f"Skipping {package} and continuing installation.")
+                        else:
+                            print("Invalid input. Skipping dependency installation.")
+                            return
+
+                # Install APT dependencies
+                for package in apt_packages:
+                    print(f"Installing system package: {package}")
+                    try:
+                        result = subprocess.run(["sudo", "apt", "install", "-y", package], text=True, stderr=subprocess.PIPE)
+                        if result.returncode != 0:
+                            raise Exception(result.stderr.strip())
+                        installed_packages[package_name]["dependencies"]["apt"].append(package)
+                    except Exception as e:
+                        print(f"Error: {package} could not be installed because {e}.")
+                        continue_install = input("Do you want to continue installation? (y/n): ").lower()
+                        if continue_install == "n":
+                            print("Uninstalling package...")
+                            lpm_remove(package_name)
+                            return
+                        elif continue_install == "y":
+                            print(f"Skipping {package} and continuing installation.")
+                        else:
+                            print("Invalid input. Skipping dependency installation.")
+                            return
+            elif install_deps == "n":
+                print("Skipping dependency installation.")
+            else:
+                print("Invalid input. Skipping dependency installation.")
+        else:
+            print("No dependencies found.")
+
+        save_installed_packages(installed_packages)
+        update_installed_modules()  # Update the installed modules list
+        print("Installation complete.")
+    except requests.exceptions.RequestException as e:
+        print(f"Error downloading package: {e}")
     except Exception as e:
         print(f"Error installing package: {e}")
 
@@ -460,42 +581,128 @@ def lpm_update():
     clear_screen()
     print("Updating all installed packages...")
     installed_packages = load_installed_packages()
-    for package_name in installed_packages.keys():
-        print(f"Updating package: {package_name}")
-        lpm_install(package_name)
+    update_installed_modules()  # Update the installed modules list
+    installed_modules = load_installed_modules()
+
+    for package_name, package_data in installed_packages.items():
+        print(f"Checking for updates in package: {package_name}")
+        package_dir = LPM_DIR / package_name
+
+        # Validate package_data structure
+        if not isinstance(package_data, dict) or "dependencies" not in package_data:
+            print(f"Error: Invalid data structure for package '{package_name}'. Skipping...")
+            continue
+
+        dependencies = package_data.get("dependencies", {})
+        installed_python = dependencies.get("python", [])
+        installed_apt = dependencies.get("apt", [])
+
+        # Recursively search for requirements.txt and apt.txt
+        requirements_file = None
+        apt_file = None
+        for root, _, files in os.walk(package_dir):
+            if "requirements.txt" in files:
+                requirements_file = Path(root) / "requirements.txt"
+            if "apt.txt" in files:
+                apt_file = Path(root) / "apt.txt"
+
+        new_python_packages = []
+        new_apt_packages = []
+
+        if requirements_file:
+            with open(requirements_file, "r") as f:
+                python_packages = [line.strip() for line in f if line.strip()]
+                new_python_packages = [pkg for pkg in python_packages if pkg not in installed_python and pkg not in installed_modules]
+
+        if apt_file:
+            with open(apt_file, "r") as f:
+                apt_packages = [line.strip() for line in f if line.strip()]
+                new_apt_packages = [pkg for pkg in apt_packages if pkg not in installed_apt]
+
+        if new_python_packages or new_apt_packages:
+            print(f"New dependencies found for {package_name}:")
+            if new_python_packages:
+                print(f"- Python: {', '.join(new_python_packages)}")
+            if new_apt_packages:
+                print(f"- APT: {', '.join(new_apt_packages)}")
+
+            install_deps = input("Do you want to install these new dependencies? (y/n): ").lower()
+            if install_deps == "y":
+                for package in new_python_packages:
+                    print(f"Installing Python package: {package}")
+                    try:
+                        result = subprocess.run(["pip3", "install", "--break-system-packages", package], text=True, stderr=subprocess.PIPE)
+                        if result.returncode != 0:
+                            print(f"pip3 failed. Trying pip...")
+                            result = subprocess.run(["pip", "install", "--break-system-packages", package], text=True, stderr=subprocess.PIPE)
+                            if result.returncode != 0:
+                                raise Exception(result.stderr.strip())
+                        installed_python.append(package)
+                    except Exception as e:
+                        print(f"Error: {package} could not be installed because {e}.")
+
+                for package in new_apt_packages:
+                    print(f"Installing system package: {package}")
+                    try:
+                        result = subprocess.run(["sudo", "apt", "install", "-y", package], text=True, stderr=subprocess.PIPE)
+                        if result.returncode != 0:
+                            raise Exception(result.stderr.strip())
+                        installed_apt.append(package)
+                    except Exception as e:
+                        print(f"Error: {package} could not be installed because {e}.")
+            elif install_deps == "n":
+                print(f"Skipping new dependencies for {package_name}.")
+            else:
+                print("Invalid input. Skipping new dependencies.")
+
+        # Update the dependencies in the installed packages
+        package_data["dependencies"]["python"] = installed_python
+        package_data["dependencies"]["apt"] = installed_apt
+
+    save_installed_packages(installed_packages)
+    update_installed_modules()  # Update the installed modules list again
     print("All packages updated successfully.")
 
 def execute_command(command):
-    installed_packages = load_installed_packages()
-    for package, files in installed_packages.items():
-        for file_path in files:
-            file = Path(file_path)
-            if file.stem == command:
-                if file.suffix == ".py":
-                    exec(open(file).read(), globals())
-                elif file.suffix == ".sh":
-                    subprocess.run(["bash", str(file)])
-                return True
+    try:
+        installed_packages = load_installed_packages()
+        for package, files in installed_packages.items():
+            for file_path in files:
+                file = Path(file_path)
+                if file.stem == command:
+                    if file.suffix == ".py":
+                        exec(open(file).read(), globals())
+                    elif file.suffix == ".sh":
+                        subprocess.run(["bash", str(file)])
+                    return True
 
-    # Handle running `lsh` inside itself
-    if command == "lsh":
-        try:
-            subprocess.run([sys.executable, __file__])
-        except Exception as e:
-            print(f"Error running lsh: {e}")
-        return True
+        # Handle running `lsh` inside itself
+        if command == "lsh":
+            try:
+                subprocess.run([sys.executable, __file__])
+            except Exception as e:
+                print(f"Error running lsh: {e}")
+            return True
+        if command == "python3 lsh.py" or command == "/bin/python3 /home/core/Python/lsh.py":
+            try:
+                subprocess.run([sys.executable, __file__])
+            except Exception as e:
+                print(f"Error running lsh: {e}")
+            return True
+        # Handle running other shells like sh, bash, ash, etc.
+        if command in ["sh", "bash", "ash", "zsh", "dash"]:
+            try:
+                subprocess.run([command])
+            except FileNotFoundError:
+                print(f"Error: {command} is not installed or not in PATH.")
+            except Exception as e:
+                print(f"Error running {command}: {e}")
+            return True
 
-    # Handle running other shells like sh, bash, ash, etc.
-    if command in ["sh", "bash", "ash", "zsh", "dash"]:
-        try:
-            subprocess.run([command])
-        except FileNotFoundError:
-            print(f"Error: {command} is not installed or not in PATH.")
-        except Exception as e:
-            print(f"Error running {command}: {e}")
-        return True
-
-    return False
+        return False
+    except Exception as e:
+        print(f"Error executing command '{command}': {e}")
+        return False
 
 def get_prompt():
     username = getpass.getuser()
@@ -528,7 +735,7 @@ def execute_system_command(command):
                 if result.stdout.strip():
                     print(result.stdout.strip())
     except Exception as e:
-        print(f"Error executing system command: {e}")
+        print(f"Error executing system command '{command}': {e}")
 
 def change_directory(path):
     try:
@@ -554,8 +761,6 @@ def admin_menu():
             if command.startswith("cd "):
                 path = command[3:].strip()
                 change_directory(path)
-            elif command == "cd":
-                os.chdir(Path.home())
             elif command == "clear":
                 clear_screen()
             elif command == "history":
@@ -575,10 +780,6 @@ def admin_menu():
                 print('Usage: lpm install <package_name>')
             elif command == ('lpm remove'): 
                 print('Usage: lpm remove <package_name>')
-            elif command == ('lpm search'): 
-                print('Usage: lpm search')
-            elif command == ('lpm update'):
-                print('Usage: lpm update')
             elif command.startswith('lpm install '):
                 package_name = command.split(' ', 2)[2]
                 lpm_install(package_name)
@@ -593,6 +794,10 @@ def admin_menu():
                 print('Exiting...')
                 time.sleep(2)
                 break
+            elif command == "":
+                continue
+            elif command == (" ") or command == ("  "):
+                continue
             elif command == "help":
                 print('Available commands: cd <path>, clear, history, rps, hman, snake, calc, lpm install <package>, lpm remove <package>, lpm search, lpm update, exit')
                 print('Additionally, you can run installed package commands directly or system commands.')
@@ -607,6 +812,8 @@ def admin_menu():
             print("logout")
             save_history()  # Save history before exiting
             break
+        except Exception as e:
+            print(f"Unexpected error in admin_menu: {e}")
     save_history()  # Save history on exit
 
 def handle_signals():
@@ -632,30 +839,35 @@ def parse_arguments():
     return parser.parse_args()
 
 def main():
-    args = parse_arguments()
+    try:
+        args = parse_arguments()
 
-    if args.version:
-        print("Lff SHell version 1.0.2")
-        sys.exit(0)
+        if args.version:
+            print("Lff SHell version 1.1.0")
+            sys.exit(0)
 
-    handle_signals()
-    setup_environment()
+        handle_signals()
+        setup_environment()
 
-    if args.login:
-        os.environ["LOGIN_SHELL"] = "1"
-        clear_screen()
+        if args.login:
+            os.environ["LOGIN_SHELL"] = "1"
+            clear_screen()
 
-    if args.command:
-        # Execute the provided command and exit
-        try:
-            if not execute_command(args.command):
-                execute_system_command(args.command)
-        except Exception as e:
-            print(f"Error executing command: {e}")
-        sys.exit(0)
+        if args.command:
+            # Execute the provided command and exit
+            try:
+                if not execute_command(args.command):
+                    execute_system_command(args.command)
+            except Exception as e:
+                print(f"Error executing command: {e}")
+            sys.exit(0)
 
-    # Start the interactive shell
-    admin_menu()
+        # Start the interactive shell
+        admin_menu()
+    except Exception as e:
+        print(f"Critical error in main: {e}")
+        time.sleep(2)
+        os._exit(1)
 
 if __name__ == "__main__":
     try:
