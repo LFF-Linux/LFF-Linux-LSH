@@ -8,7 +8,7 @@ I occasionally create and publish new packages for it, and plan to expand the ec
 
 1. Download the latest release from https://github.com/LFF-Linux/LFF-Linux-LSH/releases/latest
 2. Open a terminal, and go to the folder that contains the *lsh.py* file.
-3. Run the command <pre> ```sudo cp ./main.py /usr/bin/lsh && chmod 777 /usr/bin/lsh ```<pre>
+3. Run the command <pre> ```sudo cp ./main.py /usr/bin/lsh && chmod 777 /usr/bin/lsh ``` </pre>
 4. Run the command <pre> ```lsh --version ``` </pre> if it outputs the version you downloaded, your good to go!
 5. Run the command <pre> ```lsh ``` </pre> to enter your new shell!
 
