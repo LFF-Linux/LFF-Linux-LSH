@@ -12,6 +12,8 @@ I occasionally create and publish new packages for it, and plan to expand the ec
 
 **How to set as login shell (The easy way pt. 2)**
 
+Warning: This script is experimential and it is not recommended to set it as the login/default shell.
+
 Just run the commmand <pre> ```chsh /usr/bin/lsh $USER && rm ~/.profile && echo "exec /usr/bin/lsh" > ~/.profile ``` </pre>
 
 Your all done! The next time you log in using tty or open a terminal, lsh will greet you! If you have any issues, feel free to put them in the issues page of this repository!
