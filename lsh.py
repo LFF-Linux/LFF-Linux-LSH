@@ -760,11 +760,15 @@ def execute_command(command):
             for file_path in package_data["commands"]:
                 file = Path(file_path)
                 if file.stem == command:
-                    if file.suffix == ".py":
-                        exec(open(file).read(), globals())
-                    elif file.suffix == ".sh":
-                        subprocess.run(["bash", str(file)])
-                    return True
+                    try:
+                        if file.suffix == ".py":
+                            exec(open(file).read(), globals())
+                        elif file.suffix == ".sh":
+                            subprocess.run(["bash", str(file)])
+                        return True
+                    except Exception as e:
+                        print(f"Error executing LPM-Installed command '{command}': {e}")
+                        return True  # Prevent fallback to system command
 
         # Handle running `lsh` inside itself
         if command == "lsh":
