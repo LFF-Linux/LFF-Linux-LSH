@@ -116,191 +116,6 @@ def update_installed_apt_packages():
     except Exception as e:
         print(f"Error updating installed APT packages: {e}")
 
-def play_rps():
-    print("Welcome to Rock, Paper, Scissors!")
-    print("Let's play a game.")
-
-    choices = ["rock", "paper", "scissors"]
-    rounds = 3
-    play_again = True
-
-    while play_again:
-        round_count = 0
-        player_score = 0
-        computer_score = 0
-
-        while round_count < rounds:
-            round_count += 1
-            print("\nRound", round_count)
-
-            player_choice = input("Choose your move (rock, paper, scissors), or type 'exit' to quit: ").lower()
-
-            if player_choice == "exit":
-                play_again = False
-                break
-
-            if player_choice not in choices:
-                print("Invalid choice. Please try again.")
-                round_count -= 1
-                continue
-
-            computer_choice = random.choice(choices)
-
-            print("You chose:", player_choice)
-            print("Computer chose:", computer_choice)
-
-            if player_choice == computer_choice:
-                print("It's a tie!")
-            elif (
-                (player_choice == "rock" and computer_choice == "scissors") or
-                (player_choice == "paper" and computer_choice == "rock") or
-                (player_choice == "scissors" and computer_choice == "paper")
-            ):
-                print("Congratulations! You win this round!")
-                player_score += 1
-            else:
-                print("Sorry! You lose this round!")
-                computer_score += 1
-
-        print("\nGame Over!")
-        print("Player Score:", player_score)
-        print("Computer Score:", computer_score)
-
-        if player_score > computer_score:
-            print("Congratulations! You win the game!")
-        elif player_score < computer_score:
-            print("Sorry! You lose the game!")
-        else:
-            print("It's a tie!")
-
-        play_again_input = input("Do you want to play again? (y/n): ")
-        if play_again_input.lower() != "y":
-            play_again = False
-            print("Quitting...")
-            time.sleep(2)
-            clear_screen()
-            admin_menu()
-
-def play_hangman():
-    clear_screen()
-    words = ["python", "programming", "hangman", "game", "computer", "admin", "table", "linux", "ubuntu", "source", "tech"]
-    word = random.choice(words).lower()
-    guessed_letters = []
-    attempts = 6
-
-    hangman_stages = [
-        """
-           _________
-           |       |
-           |       
-           |      
-           |      
-           |      
-        ___|___
-        """,
-        """
-           _________
-           |       |
-           |       O
-           |      
-           |      
-           |      
-        ___|___
-        """,
-        """
-           _________
-           |       |
-           |       O
-           |       |
-           |      
-           |      
-        ___|___
-        """,
-        """
-           _________
-           |       |
-           |       O
-           |      /|
-           |      
-           |      
-        ___|___
-        """,
-        """
-           _________
-           |       |
-           |       O
-           |      /|\\
-           |      
-           |      
-        ___|___
-        """,
-        """
-           _________
-           |       |
-           |       O
-           |      /|\\
-           |      / 
-           |      
-        ___|___
-        """,
-        """
-           _________
-           |       |
-           |       O
-           |      /|\\
-           |      / \\
-           |      
-        ___|___
-        """
-    ]
-
-    print("Welcome to Hangman!")
-    print("Try to guess the word. You have 6 attempts.")
-
-    while True:
-        clear_screen()
-        print(hangman_stages[6 - attempts])  # Display the current hangman stage
-        hidden_word = "".join([letter if letter in guessed_letters else "_" for letter in word])
-        print("\nWord:", hidden_word)
-        print("Guessed letters:", ", ".join(guessed_letters))
-        print("Attempts left:", attempts)
-
-        if hidden_word == word:
-            print("Congratulations! You guessed the word correctly.")
-            break
-
-        if attempts == 0:
-            print("Game over! You ran out of attempts.")
-            print("The word was:", word)
-            break
-
-        guess = input("Enter a letter: ").lower()
-
-        if len(guess) != 1 or not guess.isalpha():
-            print("Invalid input. Please enter a single letter.")
-            continue
-
-        if guess in guessed_letters:
-            print("You've already guessed that letter.")
-            continue
-
-        guessed_letters.append(guess)
-
-        if guess in word:
-            print("Correct guess!")
-        else:
-            print("Wrong guess!")
-            attempts -= 1
-
-    play_again = input("Do you want to play again? (y/n): ")
-    if play_again.lower() == "y":
-        play_hangman()
-    else:
-        print("Quitting...")
-        time.sleep(2)
-        clear_screen()
-        admin_menu()
-
 def play_snake():
     def play_game(stdscr):
         curses.curs_set(0)
@@ -870,10 +685,6 @@ def admin_menu():
                 show_history()
             elif command == "cmds":
                 show_installed_commands()
-            elif command == 'rps':
-                play_rps()
-            elif command == 'hman':
-                play_hangman()
             elif command == 'snake':
                 play_snake()
             elif command == 'calc':
@@ -904,7 +715,7 @@ def admin_menu():
             elif command == (" ") or command == ("  "):
                 continue
             elif command == "help":
-                print('Available commands: cd <path>, clear, history, cmds, rps, hman, snake, calc, lpm install <package>, lpm remove <package>, lpm search, lpm update, exit')
+                print('Available commands: cd <path>, clear, history, cmds, snake, calc, lpm install <package>, lpm remove <package>, lpm search, lpm update, exit')
                 print('Additionally, you can run installed package commands directly or system commands.')
             else:
                 if not execute_command(command):
