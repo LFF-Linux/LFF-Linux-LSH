@@ -475,6 +475,11 @@ def lpm_install(package_name):
 
         print(f"Package {package_name} installed successfully.")
 
+        # Update the list of installed modules and APT packages
+        print("Updating the list of installed modules and APT packages...")
+        update_installed_modules()
+        update_installed_apt_packages()
+        
         # Recursively search for requirements.txt and apt.txt
         requirements_file = None
         apt_file = None
