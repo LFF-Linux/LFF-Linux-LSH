@@ -15,8 +15,6 @@ import signal
 import argparse
 
 HISTORY_FILE = Path.home() / ".config/lff-linux/history.txt"
-INSTALLED_MODULES_FILE = Path.home() / ".config/lff-linux/installed_modules.json"
-INSTALLED_APT_PACKAGES_FILE = Path.home() / ".config/lff-linux/installed_apt_packages.json"
 
 def admin_menu():
     import readline
@@ -24,24 +22,15 @@ def admin_menu():
     load_history()  # Load history at the start
     username = getpass.getuser()
 
-    # Fix prompt redraw and line wrapping issues
-    def pre_input_hook():
-        prompt = get_prompt()
-        sys.stdout.write("\r" + prompt)
-        sys.stdout.flush()
-    readline.set_pre_input_hook(pre_input_hook)
-
     # Handle terminal resize (SIGWINCH) to redraw prompt only once per resize event
     def handle_sigwinch(signum, frame):
-        # Tell readline to redisplay prompt on next input
         import readline
         readline.redisplay()
     signal.signal(signal.SIGWINCH, handle_sigwinch)
 
     while True:
         try:
-            # Use input with empty prompt, since pre_input_hook draws it
-            command = input("").strip()
+            command = input(get_prompt()).strip()
             if command.startswith("cd "):
                 path = command[3:].strip()
                 change_directory(path)
@@ -49,10 +38,6 @@ def admin_menu():
                 clear_screen()
             elif command == "history":
                 show_history()
-            elif command == 'snake':
-                play_snake()
-            elif command == 'calc':
-                calculator()
             elif command == "exit":
                 print('Exiting...')
                 time.sleep(2)
@@ -68,16 +53,13 @@ def admin_menu():
                 if not execute_command(command):
                     execute_system_command(command)
         except KeyboardInterrupt:
-            # Ignore Ctrl+C and print a new prompt
             print("\n[!] Interrupted. Press 'Ctrl+D' to exit.")
         except EOFError:
-            # Exit the shell on Ctrl+D
             print("logout")
             save_history()  # Save history before exiting
             break
         except Exception as e:
             print(f"Unexpected error in admin_menu: {e}")
-    readline.set_pre_input_hook(None)
     save_history()  # Save history on exit
 
 # Load command history from file
@@ -154,192 +136,6 @@ def write_file(filename, value):
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
-
-def load_installed_modules():
-    """Load the list of globally installed modules."""
-    if INSTALLED_MODULES_FILE.exists():
-        with open(INSTALLED_MODULES_FILE, "r") as file:
-            return json.load(file)
-    return []
-
-def save_installed_modules(modules):
-    """Save the list of globally installed modules."""
-    with open(INSTALLED_MODULES_FILE, "w") as file:
-        json.dump(modules, file, indent=4)
-
-def update_installed_modules():
-    """Update the installed modules list by checking the system."""
-    try:
-        result = subprocess.run(["pip3", "list", "--format=json"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if result.returncode == 0:
-            try:
-                installed_modules = [pkg["name"] for pkg in json.loads(result.stdout)]
-                save_installed_modules(installed_modules)
-            except (json.JSONDecodeError, KeyError) as e:
-                print(f"Error parsing pip3 output: {e}")
-        else:
-            print(f"Error updating installed modules: {result.stderr.strip()}")
-    except Exception as e:
-        print(f"Error updating installed modules: {e}")
-
-def load_installed_apt_packages():
-    """Load the list of globally installed APT packages."""
-    if INSTALLED_APT_PACKAGES_FILE.exists():
-        with open(INSTALLED_APT_PACKAGES_FILE, "r") as file:
-            return json.load(file)
-    return []
-
-def save_installed_apt_packages(packages):
-    """Save the list of globally installed APT packages."""
-    with open(INSTALLED_APT_PACKAGES_FILE, "w") as file:
-        json.dump(packages, file, indent=4)
-
-def update_installed_apt_packages():
-    """Update the installed APT packages list by checking the system."""
-    try:
-        result = subprocess.run(["dpkg-query", "-W", "-f=${Package}\n"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if result.returncode == 0:
-            installed_apt_packages = result.stdout.strip().split("\n")
-            save_installed_apt_packages(installed_apt_packages)
-        else:
-            print(f"Error updating installed APT packages: {result.stderr.strip()}")
-    except Exception as e:
-        print(f"Error updating installed APT packages: {e}")
-
-def play_snake():
-    def play_game(stdscr):
-        curses.curs_set(0)
-        stdscr.nodelay(True)
-        stdscr.timeout(100)
-
-        height, width = stdscr.getmaxyx()
-
-        snake_x = width // 4
-        snake_y = height // 2
-        snake = [
-            [snake_y, snake_x],
-            [snake_y, snake_x - 1],
-            [snake_y, snake_x - 2]
-        ]
-        direction = curses.KEY_RIGHT
-
-        food_size = 3
-        food_x = random.randint(food_size, width - food_size)
-        food_y = random.randint(food_size, height - food_size)
-        food = [food_y, food_x]
-
-        score = 0
-
-        while True:
-            key = stdscr.getch()
-
-            if key == ord('q'):
-                curses.endwin()
-                clear_screen()
-                print("Quitting...")
-                time.sleep(2)
-                clear_screen()
-                admin_menu()
-
-            if key == curses.KEY_DOWN and direction != curses.KEY_UP:
-                direction = curses.KEY_DOWN
-            elif key == curses.KEY_UP and direction != curses.KEY_DOWN:
-                direction = curses.KEY_UP
-            elif key == curses.KEY_LEFT and direction != curses.KEY_RIGHT:
-                direction = curses.KEY_LEFT
-            elif key == curses.KEY_RIGHT and direction != curses.KEY_LEFT:
-                direction = curses.KEY_RIGHT
-
-            head = snake[0][:]
-            if direction == curses.KEY_DOWN:
-                head[0] += 1
-            elif direction == curses.KEY_UP:
-                head[0] -= 1
-            elif direction == curses.KEY_LEFT:
-                head[1] -= 1
-            elif direction == curses.KEY_RIGHT:
-                head[1] += 1
-
-            snake.insert(0, head)
-            if head == food:
-                food_x = random.randint(food_size, width - food_size)
-                food_y = random.randint(food_size, height - food_size)
-                food = [food_y, food_x]
-                score += 1
-            else:
-                tail = snake.pop()
-
-            if (
-                head[0] == 0
-                or head[0] == height - 1
-                or head[1] == 0
-                or head in snake[1:]
-            ):
-                curses.endwin()
-                clear_screen()
-                print("Game Over!")
-                print("Score:", score)
-                time.sleep(2)
-                print("Would you like to try again? (y/n)")
-                if input('> ').lower() == 'y':
-                    clear_screen()
-                    play_snake()
-                else:
-                    clear_screen()
-                    print('Quitting...')
-                    time.sleep(2)
-                    clear_screen()
-                    admin_menu()
-
-            new_height, new_width = stdscr.getmaxyx()
-            if new_height != height or new_width != width:
-                height, width = new_height, new_width
-
-            stdscr.erase()
-            stdscr.border()
-            stdscr.addch(food[0], food[1], '*', curses.A_BOLD)
-            for segment in snake:
-                stdscr.addch(segment[0], segment[1], '#', curses.A_BOLD)
-            stdscr.addstr(0, 2, "Score: " + str(score), curses.A_BOLD)
-            stdscr.refresh()
-
-    curses.wrapper(play_game)
-
-def calculator():
-    def calculate(n1, n2, op):
-        if op == '+':
-            result = n1 + n2
-        elif op == '-':
-            result = n1 - n2
-        elif op == '*':
-            result = n1 * n2
-        elif op == '/':
-            result = n1 / n2
-        elif op == '^':
-            result = n1 ** n2
-        else:
-            raise ValueError('Invalid operator')
-
-        if result.is_integer():
-            result = int(result)
-
-        return result
-
-    while True:
-        try:
-            number1 = float(input('Enter first number: '))
-            op = input('Enter operator (+,-,*,/,^): ')
-            number2 = float(input('Enter second number: '))
-            result = calculate(number1, number2, op)
-            print('=', result)
-            if input('Continue? (y/n): ').lower() != 'y':
-                break
-        except Exception as e:
-            print('Error:', e)
-            print('Restarting application...')
-
-
-
 def get_prompt():
     # Bash-style color prompt using ANSI escape codes
     username = getpass.getuser()
@@ -349,8 +145,13 @@ def get_prompt():
     if current_dir.startswith(home_dir):
         current_dir = current_dir.replace(home_dir, "~", 1)
 
-    # Default bash-like colored prompt
-    default_ps1 = f"\033[1;32m{username}@{hostname}\033[0m:\033[1;34m{current_dir}\033[0m$ "
+    # Default bash-like colored prompt with readline markers for non-printing chars
+    def wrap_ansi(s):
+        import re
+        # Wrap all ANSI escape sequences with \001 and \002
+        return re.sub(r'(\033\[[0-9;]+m)', r'\001\1\002', s)
+
+    default_ps1 = wrap_ansi(f"\033[1;32m{username}@{hostname}\033[0m:\033[1;34m{current_dir}\033[0m$ ")
 
     # Try to read PS1 from ~/.bashrc for compatibility
     bashrc_path = Path.home() / ".bashrc"
@@ -398,6 +199,8 @@ def get_prompt():
         # Replace \x1b[...m with actual ANSI codes
         ps1 = re.sub(r'\\x1b\[([0-9;]+)m', lambda m: f'\033[{m.group(1)}m', ps1)
 
+        # Wrap all ANSI escape sequences with \001 and \002 for readline
+        ps1 = re.sub(r'(\033\[[0-9;]+m)', r'\001\1\002', ps1)
         return ps1
     else:
         # Use default colored prompt
@@ -449,10 +252,6 @@ def change_directory(path):
                 clear_screen()
             elif command == "history":
                 show_history()
-            elif command == 'snake':
-                play_snake()
-            elif command == 'calc':
-                calculator()
             elif command == "exit":
                 print('Exiting...')
                 time.sleep(2)
@@ -462,7 +261,7 @@ def change_directory(path):
             elif command == (" ") or command == ("  "):
                 continue
             elif command == "help":
-                print('Available commands: cd <path>, clear, history, cmds, snake, calc, exit')
+                print('Available commands: cd <path>, clear, history, exit')
                 print('Additionally, you can run system commands.')
             else:
                 if not execute_command(command):
@@ -571,9 +370,7 @@ def main():
             except Exception as e:
                 print(f"Error executing command: {e}")
             sys.exit(0)
-
-        update_installed_apt_packages()
-        update_installed_modules()
+            
         # Start the interactive shell
         admin_menu()
     except Exception as e:
