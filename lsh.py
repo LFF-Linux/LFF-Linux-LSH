@@ -19,11 +19,29 @@ INSTALLED_MODULES_FILE = Path.home() / ".config/lff-linux/installed_modules.json
 INSTALLED_APT_PACKAGES_FILE = Path.home() / ".config/lff-linux/installed_apt_packages.json"
 
 def admin_menu():
+    import readline
+    import signal
     load_history()  # Load history at the start
     username = getpass.getuser()
+
+    # Fix prompt redraw and line wrapping issues
+    def pre_input_hook():
+        prompt = get_prompt()
+        sys.stdout.write("\r" + prompt)
+        sys.stdout.flush()
+    readline.set_pre_input_hook(pre_input_hook)
+
+    # Handle terminal resize (SIGWINCH) to redraw prompt only once per resize event
+    def handle_sigwinch(signum, frame):
+        # Tell readline to redisplay prompt on next input
+        import readline
+        readline.redisplay()
+    signal.signal(signal.SIGWINCH, handle_sigwinch)
+
     while True:
         try:
-            command = input(get_prompt()).strip()
+            # Use input with empty prompt, since pre_input_hook draws it
+            command = input("").strip()
             if command.startswith("cd "):
                 path = command[3:].strip()
                 change_directory(path)
@@ -59,6 +77,7 @@ def admin_menu():
             break
         except Exception as e:
             print(f"Unexpected error in admin_menu: {e}")
+    readline.set_pre_input_hook(None)
     save_history()  # Save history on exit
 
 # Load command history from file
@@ -466,10 +485,53 @@ def handle_signals():
     signal.signal(signal.SIGTERM, lambda sig, frame: sys.exit(0))
 
 def setup_environment():
-    """Set up the environment for the shell."""
-    os.environ["SHELL"] = __file__
-    os.environ["USER"] = getpass.getuser()
+    """Set up the environment for the shell, mimicking bash as closely as possible."""
+    import re
+    import pwd
+    bashrc_path = Path.home() / ".bashrc"
+    # Set HOME, USER, LOGNAME, SHELL, PWD
     os.environ["HOME"] = str(Path.home())
+    os.environ["USER"] = getpass.getuser()
+    os.environ["LOGNAME"] = os.environ.get("USER", getpass.getuser())
+    os.environ["SHELL"] = os.environ.get("SHELL", "/bin/bash")
+    os.environ["PWD"] = os.getcwd()
+
+    # Set PATH from bashrc if not already set
+    if "PATH" not in os.environ or not os.environ["PATH"]:
+        path_val = None
+        if bashrc_path.exists():
+            with open(bashrc_path, "r") as f:
+                for line in f:
+                    m = re.match(r'\s*export\s+PATH=(.*)', line)
+                    if m:
+                        # Remove possible quotes
+                        path_val = m.group(1).strip().strip('"\'')
+                        break
+        if path_val:
+            os.environ["PATH"] = path_val
+        else:
+            # Fallback to system default
+            os.environ["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+    # Set locale variables from bashrc if present, else inherit or fallback
+    locale_vars = [
+        "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "LC_NUMERIC", "LC_TIME", "LC_COLLATE", "LC_MONETARY", "LC_MESSAGES", "LC_PAPER", "LC_NAME", "LC_ADDRESS", "LC_TELEPHONE", "LC_MEASUREMENT", "LC_IDENTIFICATION"
+    ]
+    if bashrc_path.exists():
+        with open(bashrc_path, "r") as f:
+            bashrc_lines = f.readlines()
+        for var in locale_vars:
+            for line in bashrc_lines:
+                m = re.match(rf'\s*export\s+{var}=(.*)', line)
+                if m:
+                    val = m.group(1).strip().strip('"\'')
+                    os.environ[var] = val
+                    break
+    # Fallback: if not set, try to inherit from current env or set to C
+    for var in locale_vars:
+        if var not in os.environ:
+            os.environ[var] = os.environ.get(var, "C")
+
     # Ensure compatibility with VS Code's integrated terminal
     os.environ["TERM"] = "xterm-256color"
     os.environ["COLORTERM"] = "truecolor"
