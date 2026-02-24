@@ -14,7 +14,8 @@ import sys
 import signal
 import argparse
 
-HISTORY_FILE = Path.home() / ".config/lff-linux/history.txt"
+CONFIG_DIR = Path.home() / ".config/lff-linux"
+HISTORY_FILE = CONFIG_DIR / "history.txt"
 
 def admin_menu():
     import readline
@@ -31,6 +32,10 @@ def admin_menu():
     while True:
         try:
             command = input(get_prompt()).strip()
+            if command:
+                # Add command to history immediately (like bash)
+                readline.add_history(command)
+                append_history(command)
             if command.startswith("cd "):
                 path = command[3:].strip()
                 change_directory(path)
@@ -53,7 +58,8 @@ def admin_menu():
                 if not execute_command(command):
                     execute_system_command(command)
         except KeyboardInterrupt:
-            print("\n[!] Interrupted. Press 'Ctrl+D' to exit.")
+            print("")
+            continue
         except EOFError:
             print("logout")
             save_history()  # Save history before exiting
@@ -62,18 +68,31 @@ def admin_menu():
             print(f"Unexpected error in admin_menu: {e}")
     save_history()  # Save history on exit
 
+
+# Ensure config directory exists
+def ensure_config_dir():
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
 # Load command history from file
 def load_history():
+    ensure_config_dir()
     if HISTORY_FILE.exists():
         with open(HISTORY_FILE, "r") as file:
             for line in file:
                 readline.add_history(line.strip())
 
-# Save command history to file
+# Save command history to file (overwrite)
 def save_history():
+    ensure_config_dir()
     with open(HISTORY_FILE, "w") as file:
         for i in range(readline.get_current_history_length()):
             file.write(readline.get_history_item(i + 1) + "\n")
+
+# Append a command to the history file
+def append_history(command):
+    ensure_config_dir()
+    with open(HISTORY_FILE, "a") as file:
+        file.write(command + "\n")
 
 def show_history():
     for i in range(1, readline.get_current_history_length() + 1):
@@ -213,8 +232,11 @@ def is_interactive_command(command):
     return any(command.split()[0] == cmd for cmd in interactive_commands)
 
 def execute_system_command(command):
-    """Execute a system command and stream its output in real-time."""
+    """Execute a system command and stream its output in real-time. Also add to history."""
     try:
+        # Add to history immediately (if not already added)
+        readline.add_history(command)
+        append_history(command)
         if is_interactive_command(command):
             # Run interactive commands with terminal inheritance
             subprocess.run(command, shell=True)
@@ -267,8 +289,8 @@ def change_directory(path):
                 if not execute_command(command):
                     execute_system_command(command)
         except KeyboardInterrupt:
-            # Ignore Ctrl+C and print a new prompt
-            print("\n[!] Interrupted. Press 'Ctrl+D' to exit.")
+            print("")
+            continue
         except EOFError:
             # Exit the shell on Ctrl+D
             print("logout")
@@ -345,6 +367,7 @@ def parse_arguments():
 
 def main():
     try:
+        ensure_config_dir()
         args = parse_arguments()
 
         if args.version:
@@ -363,6 +386,9 @@ def main():
             clear_screen()
 
         if args.command:
+            # Add to history immediately (like bash)
+            readline.add_history(args.command)
+            append_history(args.command)
             # Execute the provided command and exit
             try:
                 if not execute_command(args.command):
