@@ -56,7 +56,7 @@ def admin_menu():
             continue
         except EOFError:
             print("logout")
-            break
+            sys.exit(0)
         except Exception as e:
             print(f"Unexpected error in admin_menu: {e}")
 
