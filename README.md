@@ -16,7 +16,7 @@ I occasionally create and publish new packages for it, and plan to expand the ec
 
 > **Warning:** This script is experimental and it is *not* recommended to set it as the login/default shell.
 
-Run the command:
+Run the command after installing lsh via the deb file:
 ```bash
 chsh --shell /usr/bin/lsh $USER && \
 rm ~/.profile && \
