@@ -2,10 +2,7 @@
 # LFF shell replacement – lsh.py
 import os
 import time
-import random
-import curses
 import subprocess
-import json
 import getpass
 import socket
 import readline  # For command history and tab completion
@@ -13,19 +10,18 @@ from pathlib import Path
 import sys
 import signal
 import argparse
+import shlex
+import re
 
 CONFIG_DIR = Path.home() / ".config/lff-linux"
 HISTORY_FILE = CONFIG_DIR / "history.txt"
 
 def admin_menu():
-    import readline
-    import signal
     load_history()  # Load history at the start
     username = getpass.getuser()
 
     # Handle terminal resize (SIGWINCH) to redraw prompt only once per resize event
     def handle_sigwinch(signum, frame):
-        import readline
         readline.redisplay()
     signal.signal(signal.SIGWINCH, handle_sigwinch)
 
@@ -33,8 +29,6 @@ def admin_menu():
         try:
             command = input(get_prompt()).strip()
             if command:
-                # Add command to history immediately (like bash)
-                readline.add_history(command)
                 append_history(command)
             if command.startswith("cd "):
                 path = command[3:].strip()
@@ -62,11 +56,9 @@ def admin_menu():
             continue
         except EOFError:
             print("logout")
-            save_history()  # Save history before exiting
             break
         except Exception as e:
             print(f"Unexpected error in admin_menu: {e}")
-    save_history()  # Save history on exit
 
 
 # Ensure config directory exists
@@ -80,13 +72,6 @@ def load_history():
         with open(HISTORY_FILE, "r") as file:
             for line in file:
                 readline.add_history(line.strip())
-
-# Save command history to file (overwrite)
-def save_history():
-    ensure_config_dir()
-    with open(HISTORY_FILE, "w") as file:
-        for i in range(readline.get_current_history_length()):
-            file.write(readline.get_history_item(i + 1) + "\n")
 
 # Append a command to the history file
 def append_history(command):
@@ -109,7 +94,6 @@ def execute_command(command):
             return True
 
         # Parse command and arguments
-        import shlex
         args = shlex.split(command)
         if not args:
             return False
@@ -166,7 +150,6 @@ def get_prompt():
 
     # Default bash-like colored prompt with readline markers for non-printing chars
     def wrap_ansi(s):
-        import re
         # Wrap all ANSI escape sequences with \001 and \002
         return re.sub(r'(\033\[[0-9;]+m)', r'\001\1\002', s)
 
@@ -188,8 +171,6 @@ def get_prompt():
 
     # If PS1 found, try to substitute bash variables and color codes
     if ps1:
-        import re
-        import string
         # Expand environment variables and bash parameter expansions
         def bash_var_expand(match):
             expr = match.group(1)
@@ -262,44 +243,6 @@ def change_directory(path):
     except PermissionError:
         print(f"cd: {path}: Permission denied")
 
-    load_history()  # Load history at the start
-    username = getpass.getuser()
-    while True:
-        try:
-            command = input(get_prompt()).strip()
-            if command.startswith("cd "):
-                path = command[3:].strip()
-                change_directory(path)
-            elif command == "clear":
-                clear_screen()
-            elif command == "history":
-                show_history()
-            elif command == "exit":
-                print('Exiting...')
-                time.sleep(2)
-                break
-            elif command == "":
-                continue
-            elif command == (" ") or command == ("  "):
-                continue
-            elif command == "help":
-                print('Available commands: cd <path>, clear, history, exit')
-                print('Additionally, you can run system commands.')
-            else:
-                if not execute_command(command):
-                    execute_system_command(command)
-        except KeyboardInterrupt:
-            print("")
-            continue
-        except EOFError:
-            # Exit the shell on Ctrl+D
-            print("logout")
-            save_history()  # Save history before exiting
-            break
-        except Exception as e:
-            print(f"Unexpected error in admin_menu: {e}")
-    save_history()  # Save history on exit
-
 def handle_signals():
     """Handle system signals like SIGINT and SIGTERM."""
     signal.signal(signal.SIGINT, signal.SIG_IGN)  # Ignore SIGINT (Ctrl+C)
@@ -307,8 +250,6 @@ def handle_signals():
 
 def setup_environment():
     """Set up the environment for the shell, mimicking bash as closely as possible."""
-    import re
-    import pwd
     bashrc_path = Path.home() / ".bashrc"
     # Set HOME, USER, LOGNAME, SHELL, PWD
     os.environ["HOME"] = str(Path.home())
@@ -407,10 +348,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except KeyboardInterrupt:
-        print("\n[!] Exiting LFF Shell...")
-        time.sleep(1)
-        os._exit(0)
     except Exception as e:
         print(f"\n[!] Unexpected error: {e}")
         time.sleep(2)
