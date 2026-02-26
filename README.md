@@ -61,3 +61,4 @@ Thank you for wanting to contribute to LSH! I need help with some things, so if 
 
 * Add piping support (|)
 * Add support for running and manipulating files from the current directory (./x.sh, ../test/y.sh)
+* Add autocomplete support for directories, files, and (possibly) apt packages
