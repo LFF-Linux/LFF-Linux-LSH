@@ -54,3 +54,10 @@ echo "exec /usr/bin/lsh" > ~/.profile
 
 You're all done! The next time you log in using **TTY** or open a terminal, **LSH** will greet you!  
 If you have any issues, feel free to report them **on the issues page** of this repository.
+
+## Contributing
+
+Thank you for wanting to contribute to LSH! I need help with some things, so if you are a python wizzard, or a little better than me at code, you can help me implement these features!
+
+* Add piping support (|)
+* Add support for running and manipulating files from the current directory (./x.sh, ../test/y.sh)
